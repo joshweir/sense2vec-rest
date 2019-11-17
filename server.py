@@ -66,12 +66,11 @@ def sense_matches_result(input_sense):
 
 
 def extract_sense_from_s2v_tuple(d):
-  return d.split('|')[1]
+  return split_word_and_pos_tag(d)[1]
 
 
 def extract_sense_from_result(d):
-  print('check', d, d.get('value').split('|')[1])
-  return d.get('value').split('|')[1]
+  return split_word_and_pos_tag(d.get('value'))[1]
 
 
 def uniq(l):
@@ -80,7 +79,7 @@ def uniq(l):
 
 def filter_match_input_sense(results, d):
   if isinstance(d, str):
-    term, sense = d.split('|')
+    term, sense = split_word_and_pos_tag(d)
     generic_sense = get_generic_sense(sense)
     if generic_sense == 'unknown':
       return results
@@ -89,20 +88,66 @@ def filter_match_input_sense(results, d):
   # only if all input term senses map to the same sense
   # filter on this sense, otherwise return all results
   distinct_input_senses = uniq(map(extract_sense_from_s2v_tuple, d))
-  if len(distinct_input_senses) == 1:
-    generic_sense = get_generic_sense(distinct_input_senses[0])
-    if generic_sense == 'unknown':
-      return results
-    return list(filter(sense_matches_result(generic_sense), results))
+  if len(distinct_input_senses) > 1:
+    return results
+
+  generic_sense = get_generic_sense(distinct_input_senses[0])
+  if generic_sense == 'unknown':
+    return results
+
+  return list(filter(sense_matches_result(generic_sense), results))
 
 
-def s2v_transform(d, req_args):
+def filter_reduce_multicase(data, d):
+  seen, result = set(), []
+  input_lower = [d.lower()] if isinstance(d, str) else list(
+      map(lambda x: x.lower(), d))
+  for item in data:
+    value_lower = item.get('value').lower()
+    if value_lower not in seen and value_lower not in input_lower:
+      seen.add(value_lower)
+      result.append(item)
+  return result
+
+
+def split_word_and_pos_tag(d):
+  return d.split('|')
+
+
+def filter_reduce_multi_wordform(data, d):
+  seen, result = set(), []
+  input_list = list(
+      map(split_word_and_pos_tag, [d] if isinstance(d, str) else d))
+  input_list_reduced_to_lemma = list(
+      map(lambda x: [get_lemma(x[0], x[1]), x[1]], input_list))
+  for item in data:
+    value = item.get('value')
+    value_word, value_sense = split_word_and_pos_tag(value)
+    value_word_lemma = get_lemma(value_word, value_sense)
+    value_word_lemma_sense_joined = "{0}|{1}".format(value_word_lemma,
+                                                     value_sense)
+
+    if value_word_lemma_sense_joined not in seen and [
+        value_word_lemma, value_sense
+    ] not in input_list_reduced_to_lemma:
+      seen.add(value_word_lemma_sense_joined)
+      result.append(item)
+  return result
+
+
+def s2v_most_similar_reduced(d, req_args):
   n_results = req_args.get('n') and int(req_args.get('n')) or 10
 
   results = [{
       'value': v[0],
       'score': float(v[1])
   } for v in s2v.most_similar(d, n=max([n_results * 2, 10]))]
+
+  if req_args.get('reduce-multicase'):
+    results = filter_reduce_multicase(results, d)
+
+  if req_args.get('reduce-multi-wordform'):
+    results = filter_reduce_multi_wordform(results, d)
 
   if req_args.get('match-input-sense'):
     results = filter_match_input_sense(results, d)
@@ -126,18 +171,18 @@ def index():
   parsed = json.loads(data)
 
   try:
-    result = s2v_transform(parsed, request.args)
+    result = s2v_most_similar_reduced(parsed, request.args)
   except Exception as e:
     err = str(e)
     if err.find("Can't find key") != -1:
       # if parsed is a string (single key) and it doesnt contain _ (its single word)
       # and is all lowercase a-z try uppercase version
       if isinstance(parsed, str):
-        term, sense = parsed.split('|')
+        term, sense = split_word_and_pos_tag(parsed)
         if is_single_word(term) and is_downcase_alpha(term):
           try:
-            result = s2v_transform("{0}|{1}".format(term.upper(), sense),
-                                   request.args)
+            result = s2v_most_similar_reduced(
+                "{0}|{1}".format(term.upper(), sense), request.args)
           except Exception as e2:
             err2 = str(e2)
             if err2.find("Can't find key") != -1:

@@ -19,6 +19,9 @@ RUN [ -f /app/sense2vec-vectors.zip ] || \
 RUN unzip /app/sense2vec-vectors.zip -d /sense2vec-model
 RUN rm -rf /app/sense2vec-vectors.zip
 
+RUN pip install textblob
+RUN python -m textblob.download_corpora
+
 WORKDIR /app
 
 COPY requirements.txt /app
@@ -31,5 +34,4 @@ CMD gunicorn --bind 0.0.0.0:80 \
   --worker-tmp-dir /dev/shm \
   --workers=2 --threads=4 --worker-class=gthread \
   --log-file=- \
-  --preload \
   wsgi:app
