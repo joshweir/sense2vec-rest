@@ -36,9 +36,13 @@ def get_generic_sense(sense):
 def get_lemma(word, pos_tag):
   tag = get_generic_sense(pos_tag)
   if (tag == 'unknown'):
-    return Word(word).lemmatize()
+    lemma = Word(word).lemmatize()
+    # print('lemma', lemma, word, pos_tag)
+    return lemma
 
-  return Word(word).lemmatize(tag)
+  lemma = Word(word).lemmatize(tag)
+  # print('lemma', lemma, word, pos_tag)
+  return lemma
 
 
 def is_single_word(text):
@@ -51,6 +55,10 @@ def is_downcase_alpha(text):
 
 def filter_min_score(results, min_score):
   return list(filter(lambda x: x['score'] > min_score, results))
+
+
+def filter_min_word_len(results, min_word_len):
+  return list(filter(lambda x: len(x['value']) >= min_word_len, results))
 
 
 def filter_n_results(results, n):
@@ -135,6 +143,27 @@ def filter_reduce_multi_wordform(data, d):
   return result
 
 
+def filter_reduce_compound_nouns(data, d):
+  result = []
+  input_list = list(
+      map(split_word_and_pos_tag, [d] if isinstance(d, str) else d))
+  if len(input_list) > 1 or not is_single_word(input_list[0][0]):
+    return data
+
+  input_value = input_list[0][0]
+  for item in data:
+    value = item.get('value')
+    value_word, value_sense = split_word_and_pos_tag(value)
+
+    compound_prefix_pattern = r"._" + re.escape(input_value) + r"$"
+    compound_suffix_pattern = r"^" + re.escape(input_value) + r"_."
+    if not re.search(compound_prefix_pattern,
+                     value_word, re.IGNORECASE) and not re.search(
+                         compound_suffix_pattern, value_word, re.IGNORECASE):
+      result.append(item)
+  return result
+
+
 def s2v_most_similar_reduced(d, req_args):
   n_results = req_args.get('n') and int(req_args.get('n')) or 10
 
@@ -152,6 +181,12 @@ def s2v_most_similar_reduced(d, req_args):
   if req_args.get('match-input-sense'):
     results = filter_match_input_sense(results, d)
 
+  if req_args.get('reduce-compound-nouns'):
+    results = filter_reduce_compound_nouns(results, d)
+
+  if req_args.get('min-word-len'):
+    results = filter_min_word_len(results, int(req_args.get('min-word-len')))
+
   if req_args.get('min-score'):
     results = filter_min_score(results, float(req_args.get('min-score')))
 
@@ -160,29 +195,20 @@ def s2v_most_similar_reduced(d, req_args):
   return results
 
 
-@app.route('/', methods=['POST', 'GET'])
-def index():
-  start = datetime.datetime.utcnow()
-  data = request.data.decode('utf-8')
-  if not data:
-    return Response(status=500, response="no data")
-
-  # print("got something: '%s'" % data)
-  parsed = json.loads(data)
-
+def s2v_most_similar_reduced_handle_error_when_no_result(d, req_args):
   try:
-    result = s2v_most_similar_reduced(parsed, request.args)
+    result = s2v_most_similar_reduced(d, req_args)
   except Exception as e:
     err = str(e)
     if err.find("Can't find key") != -1:
       # if parsed is a string (single key) and it doesnt contain _ (its single word)
       # and is all lowercase a-z try uppercase version
-      if isinstance(parsed, str):
-        term, sense = split_word_and_pos_tag(parsed)
+      if isinstance(d, str):
+        term, sense = split_word_and_pos_tag(d)
         if is_single_word(term) and is_downcase_alpha(term):
           try:
             result = s2v_most_similar_reduced(
-                "{0}|{1}".format(term.upper(), sense), request.args)
+                "{0}|{1}".format(term.upper(), sense), req_args)
           except Exception as e2:
             err2 = str(e2)
             if err2.find("Can't find key") != -1:
@@ -196,12 +222,31 @@ def index():
     else:
       raise
 
+  return result
+
+
+@app.route('/', methods=['POST', 'GET'])
+def index():
+  start = datetime.datetime.utcnow()
+  data = request.data.decode('utf-8')
+  if not data:
+    return Response(status=500, response="no data")
+
+  # print("got something: '%s'" % data)
+  parsed = json.loads(data)
+
+  results = []
+  for item in parsed:
+    result = s2v_most_similar_reduced_handle_error_when_no_result(
+        item, request.args)
+    results.append(result)
+
   fin = datetime.datetime.utcnow()
   print(fin - start, 'req time')
   # print('result ', result)
 
   return Response(
-      status=200, response=json.dumps(result), content_type="application/json")
+      status=200, response=json.dumps(results), content_type="application/json")
 
 
 if __name__ == '__main__':
