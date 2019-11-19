@@ -19,8 +19,8 @@ RUN [ -f /app/sense2vec-vectors.zip ] || \
 RUN unzip /app/sense2vec-vectors.zip -d /sense2vec-model
 RUN rm -rf /app/sense2vec-vectors.zip
 
-RUN pip install textblob
-RUN python -m textblob.download_corpora
+# RUN pip install textblob
+# RUN python -m textblob.download_corpora
 
 WORKDIR /app
 

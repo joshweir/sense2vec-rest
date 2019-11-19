@@ -6,7 +6,7 @@ import json
 import datetime
 from sense2vec import Sense2Vec
 import re
-from textblob import Word
+# from textblob import Word
 
 app = Flask(__name__)
 port = 80 if os.getuid() == 0 else 8000
@@ -33,16 +33,16 @@ def get_generic_sense(sense):
   return 'unknown'
 
 
-def get_lemma(word, pos_tag):
-  tag = get_generic_sense(pos_tag)
-  if (tag == 'unknown'):
-    lemma = Word(word).lemmatize()
-    # print('lemma', lemma, word, pos_tag)
-    return lemma
+# def get_lemma(word, pos_tag):
+#   tag = get_generic_sense(pos_tag)
+#   if (tag == 'unknown'):
+#     lemma = Word(word).lemmatize()
+#     # print('lemma', lemma, word, pos_tag)
+#     return lemma
 
-  lemma = Word(word).lemmatize(tag)
-  # print('lemma', lemma, word, pos_tag)
-  return lemma
+#   lemma = Word(word).lemmatize(tag)
+#   # print('lemma', lemma, word, pos_tag)
+#   return lemma
 
 
 def is_single_word(text):
@@ -122,25 +122,25 @@ def split_word_and_pos_tag(d):
   return d.split('|')
 
 
-def filter_reduce_multi_wordform(data, d):
-  seen, result = set(), []
-  input_list = list(
-      map(split_word_and_pos_tag, [d] if isinstance(d, str) else d))
-  input_list_reduced_to_lemma = list(
-      map(lambda x: [get_lemma(x[0], x[1]), x[1]], input_list))
-  for item in data:
-    value = item.get('value')
-    value_word, value_sense = split_word_and_pos_tag(value)
-    value_word_lemma = get_lemma(value_word, value_sense)
-    value_word_lemma_sense_joined = "{0}|{1}".format(value_word_lemma,
-                                                     value_sense)
+# def filter_reduce_multi_wordform(data, d):
+#   seen, result = set(), []
+#   input_list = list(
+#       map(split_word_and_pos_tag, [d] if isinstance(d, str) else d))
+#   input_list_reduced_to_lemma = list(
+#       map(lambda x: [get_lemma(x[0], x[1]), x[1]], input_list))
+#   for item in data:
+#     value = item.get('value')
+#     value_word, value_sense = split_word_and_pos_tag(value)
+#     value_word_lemma = get_lemma(value_word, value_sense)
+#     value_word_lemma_sense_joined = "{0}|{1}".format(value_word_lemma,
+#                                                      value_sense)
 
-    if value_word_lemma_sense_joined not in seen and [
-        value_word_lemma, value_sense
-    ] not in input_list_reduced_to_lemma:
-      seen.add(value_word_lemma_sense_joined)
-      result.append(item)
-  return result
+#     if value_word_lemma_sense_joined not in seen and [
+#         value_word_lemma, value_sense
+#     ] not in input_list_reduced_to_lemma:
+#       seen.add(value_word_lemma_sense_joined)
+#       result.append(item)
+#   return result
 
 
 def filter_reduce_compound_nouns(data, d):
@@ -175,8 +175,8 @@ def s2v_most_similar_reduced(d, req_args):
   if req_args.get('reduce-multicase'):
     results = filter_reduce_multicase(results, d)
 
-  if req_args.get('reduce-multi-wordform'):
-    results = filter_reduce_multi_wordform(results, d)
+  # if req_args.get('reduce-multi-wordform'):
+  #   results = filter_reduce_multi_wordform(results, d)
 
   if req_args.get('match-input-sense'):
     results = filter_match_input_sense(results, d)

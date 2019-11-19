@@ -1,8 +1,6 @@
 pytest
-# requests==2.21.0
 flask
-# futures
 flask-swaggerui
 gunicorn
 sense2vec==1.0.0a6
-textblob
+# textblob
