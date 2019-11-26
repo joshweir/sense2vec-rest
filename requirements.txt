@@ -2,5 +2,5 @@ pytest
 flask
 flask-swaggerui
 gunicorn
-sense2vec==1.0.0a6
+sense2vec
 # textblob

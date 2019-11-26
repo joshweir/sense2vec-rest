@@ -6,12 +6,16 @@ import json
 import datetime
 from sense2vec import Sense2Vec
 import re
+import random
 # from textblob import Word
 
 app = Flask(__name__)
 port = 80 if os.getuid() == 0 else 8000
 
-s2v = Sense2Vec().from_disk("/sense2vec-model/sense2vec-vectors")
+print("loading model from disk..")
+s2v = Sense2Vec().from_disk("/sense2vec-model")
+print("model loaded.")
+s2v_all_keys = list(s2v.keys())
 s2v_noun_tags = [
     'PROPN', 'NOUN', 'NUM', 'PERSON', 'NORP', 'FACILITY', 'ORG', 'GPE', 'LOC',
     'PRODUCT', 'EVENT', 'LANGUAGE', 'WORK_OF_ART', 'n'
@@ -74,11 +78,11 @@ def sense_matches_result(input_sense):
 
 
 def extract_sense_from_s2v_tuple(d):
-  return split_word_and_pos_tag(d)[1]
+  return split_word_and_sense(d)[1]
 
 
 def extract_sense_from_result(d):
-  return split_word_and_pos_tag(d.get('value'))[1]
+  return split_word_and_sense(d.get('value'))[1]
 
 
 def uniq(l):
@@ -87,7 +91,7 @@ def uniq(l):
 
 def filter_match_input_sense(results, d):
   if isinstance(d, str):
-    term, sense = split_word_and_pos_tag(d)
+    term, sense = split_word_and_sense(d)
     generic_sense = get_generic_sense(sense)
     if generic_sense == 'unknown':
       return results
@@ -118,22 +122,25 @@ def filter_reduce_multicase(data, d):
   return result
 
 
-def split_word_and_pos_tag(d):
+def split_word_and_sense(d):
   return d.split('|')
+
+
+def join_word_and_sense(word, sense):
+  return "{0}|{1}".format(word, sense)
 
 
 # def filter_reduce_multi_wordform(data, d):
 #   seen, result = set(), []
 #   input_list = list(
-#       map(split_word_and_pos_tag, [d] if isinstance(d, str) else d))
+#       map(split_word_and_sense, [d] if isinstance(d, str) else d))
 #   input_list_reduced_to_lemma = list(
 #       map(lambda x: [get_lemma(x[0], x[1]), x[1]], input_list))
 #   for item in data:
 #     value = item.get('value')
-#     value_word, value_sense = split_word_and_pos_tag(value)
+#     value_word, value_sense = split_word_and_sense(value)
 #     value_word_lemma = get_lemma(value_word, value_sense)
-#     value_word_lemma_sense_joined = "{0}|{1}".format(value_word_lemma,
-#                                                      value_sense)
+#     value_word_lemma_sense_joined = join_word_and_sense(value_word_lemma, value_sense)
 
 #     if value_word_lemma_sense_joined not in seen and [
 #         value_word_lemma, value_sense
@@ -145,15 +152,14 @@ def split_word_and_pos_tag(d):
 
 def filter_reduce_compound_nouns(data, d):
   result = []
-  input_list = list(
-      map(split_word_and_pos_tag, [d] if isinstance(d, str) else d))
+  input_list = list(map(split_word_and_sense, [d] if isinstance(d, str) else d))
   if len(input_list) > 1 or not is_single_word(input_list[0][0]):
     return data
 
   input_value = input_list[0][0]
   for item in data:
     value = item.get('value')
-    value_word, value_sense = split_word_and_pos_tag(value)
+    value_word, value_sense = split_word_and_sense(value)
 
     compound_prefix_pattern = r"._" + re.escape(input_value) + r"$"
     compound_suffix_pattern = r"^" + re.escape(input_value) + r"_."
@@ -167,10 +173,15 @@ def filter_reduce_compound_nouns(data, d):
 def s2v_most_similar_reduced(d, req_args):
   n_results = req_args.get('n') and int(req_args.get('n')) or 10
 
+  d_with_case_variations = list(filter(case_variation_found_in_s2v, d))
+  if None in d_with_case_variations:
+    return []
+
   results = [{
       'value': v[0],
       'score': float(v[1])
-  } for v in s2v.most_similar(d, n=max([n_results * 2, 10]))]
+  } for v in s2v.most_similar(
+      d_with_case_variations, n=max([n_results * 2, 10]))]
 
   if req_args.get('reduce-multicase'):
     results = filter_reduce_multicase(results, d)
@@ -196,29 +207,89 @@ def s2v_most_similar_reduced(d, req_args):
 
 
 def s2v_most_similar_reduced_handle_error_when_no_result(d, req_args):
+  d_list = [d] if isinstance(d, str) else d
+  return s2v_most_similar_reduced(d_list, req_args)
+
+
+def in_s2v(d):
+  return d in s2v
+
+
+def not_in_s2v(d):
+  return d not in s2v
+
+
+def random_sample_matching_sense(matching_sense):
+  matching_sample = None
+  while True:
+    samples = random.sample(s2v_all_keys, 50)
+    for sample in samples:
+      if sample[-2:] != '|X':
+        word, sense = split_word_and_sense(sample)
+        if sense == matching_sense:
+          matching_sample = sample
+          break
+
+    if matching_sample:
+      return matching_sample
+
+
+def s2v_key_titlecase(d, only_first_word=False):
+  word, sense = split_word_and_sense(d)
+  if only_first_word:
+    s = list(word)
+    s[0] = s[0].upper()
+    return join_word_and_sense("".join(s), sense)
+
+  return join_word_and_sense(word.title(), sense)
+
+
+def s2v_key_case_variations(d):
+  result = []
+  result.append(d)
+  word, sense = split_word_and_sense(d)
+  result.append(join_word_and_sense(word.lower(), sense))
+  result.append(d.upper())
+  result.append(s2v_key_titlecase(d))
+  result.append(s2v_key_titlecase(d, only_first_word=True))
+
+  return uniq(result)
+
+
+def case_variation_found_in_s2v(d):
+  if in_s2v(d):
+    return d
+
+  return next((x for x in s2v_key_case_variations(d) if in_s2v(x)), None)
+
+
+def random_sample_matching_sense_if_case_variation_not_found_in_s2v(d):
+  found_in_s2v = case_variation_found_in_s2v(d)
+  if found_in_s2v:
+    return found_in_s2v
+
+  return random_sample_matching_sense(split_word_and_sense(d)[1])
+
+
+def s2v_similarity_handle_error_when_no_result(k1, k2):
   try:
-    result = s2v_most_similar_reduced(d, req_args)
+    if len(k1) == 1 and not case_variation_found_in_s2v(k1[0]):
+      return float(0)
+
+    if len(k2) <= 1 and not case_variation_found_in_s2v(k2[0]):
+      return float(0)
+
+    k1_mapped = list(
+        map(random_sample_matching_sense_if_case_variation_not_found_in_s2v,
+            k1))
+    k2_mapped = list(
+        map(random_sample_matching_sense_if_case_variation_not_found_in_s2v,
+            k2))
+    result = s2v.similarity(k1_mapped, k2_mapped)
   except Exception as e:
     err = str(e)
-    if err.find("Can't find key") != -1:
-      # if parsed is a string (single key) and it doesnt contain _ (its single word)
-      # and is all lowercase a-z try uppercase version
-      if isinstance(d, str):
-        term, sense = split_word_and_pos_tag(d)
-        if is_single_word(term) and is_downcase_alpha(term):
-          try:
-            result = s2v_most_similar_reduced(
-                "{0}|{1}".format(term.upper(), sense), req_args)
-          except Exception as e2:
-            err2 = str(e2)
-            if err2.find("Can't find key") != -1:
-              result = []
-            else:
-              raise
-        else:
-          result = []
-      else:
-        result = []
+    if err.find("unsupported operand type") != -1:
+      result = float(0)
     else:
       raise
 
@@ -240,6 +311,29 @@ def index():
     result = s2v_most_similar_reduced_handle_error_when_no_result(
         item, request.args)
     results.append(result)
+
+  fin = datetime.datetime.utcnow()
+  print(fin - start, 'req time')
+  # print('result ', result)
+
+  return Response(
+      status=200, response=json.dumps(results), content_type="application/json")
+
+
+@app.route('/similarity', methods=['POST', 'GET'])
+def similarity():
+  start = datetime.datetime.utcnow()
+  data = request.data.decode('utf-8')
+  if not data:
+    return Response(status=500, response="no data")
+
+  # print("got something: '%s'" % data)
+  parsed = json.loads(data)
+
+  results = []
+  for item in parsed:
+    result = s2v_similarity_handle_error_when_no_result(item[0], item[1])
+    results.append(float(result))
 
   fin = datetime.datetime.utcnow()
   print(fin - start, 'req time')

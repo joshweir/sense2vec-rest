@@ -13,11 +13,11 @@ RUN apt-get update && apt-get install -y \
 RUN mkdir /sense2vec-model
 RUN mkdir /app
 
-RUN [ -f /app/sense2vec-vectors.zip ] || \
-  wget -O /app/sense2vec-vectors.zip https://github.com/explosion/sense2vec/releases/download/v1.0.0a2/sense2vec-vectors.zip
+# RUN [ -f /app/sense2vec-vectors.zip ] || \
+#   wget -O /app/sense2vec-vectors.zip https://github.com/explosion/sense2vec/releases/download/v1.0.0a2/sense2vec-vectors.zip
 
-RUN unzip /app/sense2vec-vectors.zip -d /sense2vec-model
-RUN rm -rf /app/sense2vec-vectors.zip
+# RUN unzip /app/sense2vec-vectors.zip -d /sense2vec-model
+# RUN rm -rf /app/sense2vec-vectors.zip
 
 # RUN pip install textblob
 # RUN python -m textblob.download_corpora
