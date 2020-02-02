@@ -62,3 +62,5 @@ target/
 .ipynb_checkpoints
 
 sense2vec-vectors.zip
+*.csv
+*.pkl

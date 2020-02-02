@@ -8,6 +8,8 @@ from sense2vec import Sense2Vec
 import re
 import random
 # from textblob import Word
+from data.load_google_ngrams_pickle import GoogleNgrams
+import statistics
 
 app = Flask(__name__)
 port = 80 if os.getuid() == 0 else 8000
@@ -15,6 +17,8 @@ port = 80 if os.getuid() == 0 else 8000
 print("loading model from disk..")
 s2v = Sense2Vec().from_disk("/sense2vec-model")
 print("model loaded.")
+google_ngrams_picklefile = '/google-ngrams.pkl'
+ngrams_lookup = GoogleNgrams(google_ngrams_picklefile)
 s2v_all_keys = list(s2v.keys())
 s2v_noun_tags = [
     'PROPN', 'NOUN', 'NUM', 'PERSON', 'NORP', 'FACILITY', 'ORG', 'GPE', 'LOC',
@@ -78,11 +82,11 @@ def sense_matches_result(input_sense):
 
 
 def extract_sense_from_s2v_tuple(d):
-  return split_word_and_sense(d)[1]
+  return s2v.split_key(d)[1]
 
 
 def extract_sense_from_result(d):
-  return split_word_and_sense(d.get('value'))[1]
+  return s2v.split_key(d.get('value'))[1]
 
 
 def uniq(l):
@@ -91,7 +95,7 @@ def uniq(l):
 
 def filter_match_input_sense(results, d):
   if isinstance(d, str):
-    term, sense = split_word_and_sense(d)
+    term, sense = s2v.split_key(d)
     generic_sense = get_generic_sense(sense)
     if generic_sense == 'unknown':
       return results
@@ -122,10 +126,6 @@ def filter_reduce_multicase(data, d):
   return result
 
 
-def split_word_and_sense(d):
-  return d.split('|')
-
-
 def join_word_and_sense(word, sense):
   return "{0}|{1}".format(word, sense)
 
@@ -133,12 +133,12 @@ def join_word_and_sense(word, sense):
 # def filter_reduce_multi_wordform(data, d):
 #   seen, result = set(), []
 #   input_list = list(
-#       map(split_word_and_sense, [d] if isinstance(d, str) else d))
+#       map(s2v.split_key, [d] if isinstance(d, str) else d))
 #   input_list_reduced_to_lemma = list(
 #       map(lambda x: [get_lemma(x[0], x[1]), x[1]], input_list))
 #   for item in data:
 #     value = item.get('value')
-#     value_word, value_sense = split_word_and_sense(value)
+#     value_word, value_sense = s2v.split_key(value)
 #     value_word_lemma = get_lemma(value_word, value_sense)
 #     value_word_lemma_sense_joined = join_word_and_sense(value_word_lemma, value_sense)
 
@@ -152,14 +152,14 @@ def join_word_and_sense(word, sense):
 
 def filter_reduce_compound_nouns(data, d):
   result = []
-  input_list = list(map(split_word_and_sense, [d] if isinstance(d, str) else d))
+  input_list = list(map(s2v.split_key, [d] if isinstance(d, str) else d))
   if len(input_list) > 1 or not is_single_word(input_list[0][0]):
     return data
 
   input_value = input_list[0][0]
   for item in data:
     value = item.get('value')
-    value_word, value_sense = split_word_and_sense(value)
+    value_word, value_sense = s2v.split_key(value)
 
     compound_prefix_pattern = r"._" + re.escape(input_value) + r"$"
     compound_suffix_pattern = r"^" + re.escape(input_value) + r"_."
@@ -225,7 +225,7 @@ def random_sample_matching_sense(matching_sense):
     samples = random.sample(s2v_all_keys, 50)
     for sample in samples:
       if sample[-2:] != '|X':
-        word, sense = split_word_and_sense(sample)
+        word, sense = s2v.split_key(sample)
         if sense == matching_sense:
           matching_sample = sample
           break
@@ -235,7 +235,7 @@ def random_sample_matching_sense(matching_sense):
 
 
 def s2v_key_titlecase(d, only_first_word=False):
-  word, sense = split_word_and_sense(d)
+  word, sense = s2v.split_key(d)
   if only_first_word:
     s = list(word)
     s[0] = s[0].upper()
@@ -247,7 +247,7 @@ def s2v_key_titlecase(d, only_first_word=False):
 def s2v_key_case_variations(d):
   result = []
   result.append(d)
-  word, sense = split_word_and_sense(d)
+  word, sense = s2v.split_key(d)
   result.append(join_word_and_sense(word.lower(), sense))
   result.append(d.upper())
   result.append(s2v_key_titlecase(d))
@@ -269,7 +269,12 @@ def random_sample_matching_sense_if_case_variation_not_found_in_s2v(d):
     return found_in_s2v
 
   return None if d['required'] == True else random_sample_matching_sense(
-      split_word_and_sense(d['wordsense'])[1])
+      s2v.split_key(d['wordsense'])[1])
+
+
+def word_sense_ngram_score(d):
+  key = ' '.join(list(map(lambda x: s2v.split_key(x['wordsense'])[0], d)))
+  return ngrams_lookup[key]
 
 
 def s2v_similarity_item_norm(d):
@@ -281,16 +286,18 @@ def s2v_similarity_item_norm(d):
 
 def s2v_similarity_handle_error_when_no_result(k1, k2):
   try:
-    k1_normalized = list(map(s2v_similarity_item_norm, k1))
-    k2_normalized = list(map(s2v_similarity_item_norm, k2))
+    k1_common_input = list(map(s2v_similarity_item_norm, k1))
+    k2_common_input = list(map(s2v_similarity_item_norm, k2))
+    k1_ngram_score = word_sense_ngram_score(k1)
+    k2_ngram_score = word_sense_ngram_score(k2)
 
-    if len(k1_normalized) == 1 and not case_variation_found_in_s2v(
-        k1_normalized[0]['wordsense']):
-      return float(0)
+    if len(k1_common_input) == 1 and not case_variation_found_in_s2v(
+        k1_common_input[0]['wordsense']):
+      return (float(0), k1_ngram_score, k2_ngram_score)
 
-    if len(k2_normalized) <= 1 and not case_variation_found_in_s2v(
-        k2_normalized[0]['wordsense']):
-      return float(0)
+    if len(k2_common_input) <= 1 and not case_variation_found_in_s2v(
+        k2_common_input[0]['wordsense']):
+      return (float(0), k1_ngram_score, k2_ngram_score)
 
     k1_mapped = list(
         map(random_sample_matching_sense_if_case_variation_not_found_in_s2v,
@@ -300,17 +307,17 @@ def s2v_similarity_handle_error_when_no_result(k1, k2):
             k2_normalized))
 
     if None in k1_mapped or None in k2_mapped:
-      return float(0)
+      return (float(0), k1_ngram_score, k2_ngram_score)
 
     result = s2v.similarity(k1_mapped, k2_mapped)
   except Exception as e:
     err = str(e)
     if err.find("unsupported operand type") != -1:
-      result = float(0)
+      result = (float(0), k1_ngram_score, k2_ngram_score)
     else:
       raise
 
-  return result
+  return (result, k1_ngram_score, k2_ngram_score)
 
 
 @app.route('/', methods=['POST', 'GET'])
