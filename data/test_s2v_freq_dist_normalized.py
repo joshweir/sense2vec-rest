@@ -8,7 +8,7 @@ print("model loaded.")
 
 print("loading pickle file..")
 picklefile = os.path.dirname(
-    os.path.abspath(__file__)) + '/s2v_freq_dist_normalized.pkl'
+    os.path.abspath(__file__)) + '/s2v_freq_dist_normalized.pkl.gz'
 cached_freq_dist = pd.read_pickle(picklefile)
 print("pickle file loaded.")
 
