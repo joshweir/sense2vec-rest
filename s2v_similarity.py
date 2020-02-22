@@ -1,4 +1,5 @@
 import random
+import os
 
 class S2vSimilarity:
 
@@ -107,7 +108,15 @@ class S2vSimilarity:
       if None in k1_mapped or None in k2_mapped:
         r = 0.0
       else:
+        if os.getenv('S2V_VERBOSE'):
+          print()
+          print('similarity comparing')
+          print('k1', k1_mapped)
+          print('k2', k2_mapped)
         r = self.s2v_util.s2v.similarity(k1_mapped, k2_mapped)
+        if os.getenv('S2V_VERBOSE'):
+          print('result', r)
+          print()
       if r > result:
         result = r
     return round(float(result), 3)
