@@ -27,7 +27,8 @@ def index():
   if not data:
     return Response(status=500, response="no data")
 
-  # print("got something: '%s'" % data)
+  if os.getenv('S2V_VERBOSE'):
+    print("request body: '%s'" % data)
   parsed = json.loads(data)
 
   results = []
@@ -51,7 +52,8 @@ def similarity():
     print('no data in request body!')
     return Response(status=500, response="no data")
 
-  # print("got something: '%s'" % data)
+  if os.getenv('S2V_VERBOSE'):
+    print("request body: '%s'" % data)
   parsed = json.loads(data)
 
   results = []
