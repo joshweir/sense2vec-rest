@@ -1,10 +1,13 @@
 import random
 import os
+from itertools import product
 
 class S2vSimilarity:
 
-  def __init__(self, s2v_util):
+  def __init__(self, s2v_util, s2v_senses):
     self.s2v_util = s2v_util
+    self.s2v_senses = s2v_senses
+    self.req_args = {}
 
 
   def call(self, k1, k2, req_args={}):
@@ -58,33 +61,44 @@ class S2vSimilarity:
 
   def collect_combinations_for_key(self, k):
     combinations = []
-    combinations.append(k)
     k_len = len(k)
-    if k_len == 1:
-      combinations += self.collect_ner_location_combinations(k)
-    elif self.req_args.get('attempt-phrase-join-for-compound-phrases') and (k_len == 2 or (k_len >= 2 and self.all_key_words_are_required(k))):
+    
+    combinations += self.collect_combinations_based_on_each_keys_combinations(k)
+
+    if k_len >= 2 and self.req_args.get('attempt-phrase-join-for-compound-phrases'):
       combinations += self.collect_compound_phrase_joined_combinations(k)
+
     return combinations
 
 
-  def collect_ner_location_combinations(self, k):
+  def collect_combinations_based_on_each_keys_combinations(self, k):
     result = []
-    word, sense = self.s2v_util.s2v.split_key(k[0]['wordsense'])
-    if sense in self.s2v_util.s2v_ner_tags:
-      # LOC and GPE seem to be interchangeable for LOCATION NER, ensure both senses are checked for similarity
-      if sense == 'LOC':
-        result.append([{ 'wordsense': self.s2v_util.join_word_and_sense(word, 'GPE'), 'required': k[0]['required'] }])
-      if sense == 'GPE':
-        result.append([{ 'wordsense': self.s2v_util.join_word_and_sense(word, 'LOC'), 'required': k[0]['required'] }])
-      # also fall back to NOUN sense
-      result.append([{ 'wordsense': self.s2v_util.join_word_and_sense(word, 'NOUN'), 'required': k[0]['required'] }])
+    inner_result = []
+    len_k = len(k)
+    for sub_k in k:
+      sub_k_result = []
+      word, sense = self.s2v_util.s2v.split_key(sub_k['wordsense'])
+      sense_based_senses = self.s2v_senses.get_adjective_based_senses(word) if sense in self.s2v_util.s2v_adj_tags else self.s2v_senses.get_noun_based_senses(word)
+      for s in sense_based_senses:
+        if len_k > 1:
+          sub_k_result.append({ 'wordsense': s, 'required': sub_k['required'] })
+        else:
+          result.append([{ 'wordsense': s, 'required': sub_k['required'] }])
+      if len_k > 1:
+        inner_result.append(sub_k_result)
+    # combine all inner combinations
+    if len_k > 1:
+      for to_append in list(product(*inner_result)):
+        # print('check', to_append)
+        result.append(list(to_append))
     return result
 
 
   def collect_compound_phrase_joined_combinations(self, k):
     result = []
-    joined_key = '_'.join(map(lambda x: self.s2v_util.s2v.split_key(x['wordsense'])[0], k))
-    result.append([{ 'wordsense': "{0}|NOUN".format(joined_key), 'required': True }])
+    joined_key = ' '.join(map(lambda x: self.s2v_util.s2v.split_key(x['wordsense'])[0], k))
+    for s in self.s2v_senses.get_noun_based_senses(joined_key):
+      result.append([{ 'wordsense': s, 'required': True }])
     return result
 
 

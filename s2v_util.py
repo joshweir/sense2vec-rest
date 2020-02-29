@@ -9,7 +9,7 @@ class S2vUtil:
     self.s2v_ner_tags = ['NUM', 'PERSON', 'NORP', 'FACILITY', 'ORG', 'GPE', 'LOC',
       'PRODUCT', 'EVENT', 'LANGUAGE', 'WORK_OF_ART']
     self.s2v_noun_tags = ['PROPN', 'NOUN', 'n'] + self.s2v_ner_tags
-    self.s2v_adj_tags = ['ADJ', 'a']
+    self.s2v_adj_tags = ['ADJ', 'ADV', 'a']
     self.s2v_verb_tags = ['VERB', 'v']
 
 

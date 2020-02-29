@@ -6,6 +6,7 @@ import json
 import datetime
 from sense2vec import Sense2Vec
 from s2v_util import S2vUtil
+from s2v_senses import S2vSenses
 from s2v_similarity import S2vSimilarity
 from s2v_synonyms import S2vSynonyms
 
@@ -16,7 +17,8 @@ print("loading model from disk..")
 s2v = Sense2Vec().from_disk("/sense2vec-model")
 print("model loaded.")
 s2v_util = S2vUtil(s2v)
-similarity_service = S2vSimilarity(s2v_util)
+s2v_senses = S2vSenses(s2v_util)
+similarity_service = S2vSimilarity(s2v_util, s2v_senses)
 synonyms_service = S2vSynonyms(s2v_util)
 
 
