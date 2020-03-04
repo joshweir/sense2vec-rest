@@ -6,6 +6,7 @@ class S2vUtil:
   def __init__(self, s2v):
     self.s2v = s2v
     self.s2v_all_keys = list(s2v.keys())
+    self.s2v_all_keys_len = len(self.s2v_all_keys)
     self.s2v_ner_tags = ['NUM', 'PERSON', 'NORP', 'FACILITY', 'ORG', 'GPE', 'LOC',
       'PRODUCT', 'EVENT', 'LANGUAGE', 'WORK_OF_ART']
     self.s2v_noun_tags = ['PROPN', 'NOUN', 'n'] + self.s2v_ner_tags
@@ -23,13 +24,6 @@ class S2vUtil:
     result.append(self.s2v_key_titlecase(d, only_first_word=True))
 
     return self.uniq(result)
-
-
-  def case_variant_if_not_in_s2v(self, d):
-    if self.in_s2v(d):
-      return d
-
-    return next((x for x in self.s2v_key_case_variations(d) if self.in_s2v(x)), None)
 
   
   def s2v_key_titlecase(self, d, only_first_word=False):

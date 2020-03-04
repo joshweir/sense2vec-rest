@@ -25,6 +25,7 @@ sense_whitelist = ["SYM", "MONEY", "PERCENT", "PRODUCT", "LANGUAGE", "LOC", "CAR
 def get_blacklisted_sense_keys(freqs):
   """Remove keys with sense that is blacklisted"""
   discarded = []
+  msg.info('collecting blacklisted sense keys')
   for key, freq in freqs.items():
     try:
       term, sense = split_key(key)
@@ -38,6 +39,7 @@ def get_blacklisted_sense_keys(freqs):
 def get_markdown_and_url_keys(freqs):
   """Remove keys that are markdown syntax or full urls"""
   discarded = []
+  msg.info('collecting markdown and url keys')
   for key, freq in freqs.items():
     try:
       term, sense = split_key(key)
@@ -57,6 +59,7 @@ def get_markdown_and_url_keys(freqs):
 def get_minority_keys(freqs, min_ratio):
     """Remove keys that are too infrequent relative to a main sense."""
     by_word = defaultdict(list)
+    msg.info('collecting minority keys')
     for key, freq in freqs.items():
         try:
             term, sense = split_key(key)
@@ -77,6 +80,7 @@ def get_minority_keys(freqs, min_ratio):
 
 
 def get_redundant_keys(vocab, vectors, min_distance):
+    msg.info('collecting redundant keys')
     if min_distance <= 0.0:
         return []
     by_word = defaultdict(list)
@@ -101,6 +105,9 @@ def get_redundant_keys(vocab, vectors, min_distance):
     return too_similar
 
 
+# values I used: 
+# min_freq_ratio=0.0 (not 0.01)
+# min_distance=0.0 (not 0.7)
 @plac.annotations(
     model_path=("Path to sense2vec model directory", "positional", None, str),
     out_dir=("Path to save the pruned sense2vec model", "positional", None, str),
@@ -116,13 +123,19 @@ def get_redundant_keys(vocab, vectors, min_distance):
         "s",
         float,
     ),
+    check_keys=("Dont do any pruning, just check if these keys would be pruned.", "option", "k", str),
 )
 def main(
   model_path,
   out_dir,
   min_freq_ratio=0.0,
   min_distance=0.0,
+  check_keys=''
 ):
+  check_keys_list = []
+  if len(check_keys) > 0:
+    check_keys_list = list(map(lambda x: x.strip(), check_keys.split(',')))
+
   s2v = Sense2Vec().from_disk(model_path)
   output_path = Path(out_dir)
   vocab = {}
@@ -138,22 +151,47 @@ def main(
   all_senses = s2v.senses
   msg.info("loaded vectors")
 
-  discarded = set()
-  discarded.update(get_blacklisted_sense_keys(vocab))
-  discarded.update(get_markdown_and_url_keys(vocab))
-  discarded.update(get_minority_keys(vocab, min_freq_ratio))
-  discarded.update(get_redundant_keys(vocab, vectors, min_distance))
-  n_vectors = len(vectors) - len(discarded)
-  s2v = Sense2Vec(shape=(n_vectors, vector_size), senses=all_senses)
-  for key, vector in vectors.items():
-    if key not in discarded:
-      s2v.add(key, vector)
-      if key in vocab:
-        s2v.set_freq(key, vocab[key])
-  msg.good("Created the sense2vec model")
-  msg.info(f"{n_vectors} vectors, {len(all_senses)} total senses")
-  s2v.to_disk(output_path)
-  msg.good("Saved model to directory", out_dir)
+  if len(check_keys_list) > 0:
+    blacklist = {}
+    whitelist = []
+    blacklisted_sense_keys = get_blacklisted_sense_keys(vocab)
+    markdown_and_url_keys = get_markdown_and_url_keys(vocab)
+    minority_keys = get_minority_keys(vocab, min_freq_ratio)
+    redundant_keys = get_redundant_keys(vocab, vectors, min_distance)
+    for k in check_keys_list:
+      if k in blacklisted_sense_keys:
+        blacklist[k] = 'sense'
+      elif k in markdown_and_url_keys:
+        blacklist[k] = 'markdown / url'
+      elif k in minority_keys:
+        blacklist[k] = 'minority'
+      elif k in redundant_keys:
+        blacklist[k] = 'redundant'
+      else:
+        whitelist.append(k)
+    msg.warn('blacklist')
+    for k in blacklist.keys():
+      msg.warn("{k}: {v}".format(k=k, v=blacklist[k]))
+    msg.good('whitelist')
+    for k in whitelist:
+      msg.good(k)
+  else:
+    discarded = set()
+    discarded.update(get_blacklisted_sense_keys(vocab))
+    discarded.update(get_markdown_and_url_keys(vocab))
+    discarded.update(get_minority_keys(vocab, min_freq_ratio))
+    discarded.update(get_redundant_keys(vocab, vectors, min_distance))
+    n_vectors = len(vectors) - len(discarded)
+    s2v = Sense2Vec(shape=(n_vectors, vector_size), senses=all_senses)
+    for key, vector in vectors.items():
+      if key not in discarded:
+        s2v.add(key, vector)
+        if key in vocab:
+          s2v.set_freq(key, vocab[key])
+    msg.good("Created the sense2vec model")
+    msg.info(f"{n_vectors} vectors, {len(all_senses)} total senses")
+    s2v.to_disk(output_path)
+    msg.good("Saved model to directory", out_dir)
 
 if __name__ == "__main__":
   try:

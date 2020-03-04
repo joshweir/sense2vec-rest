@@ -19,9 +19,13 @@ def s2v_mock():
 def similarity_service(s2v_mock):
     from s2v_util import S2vUtil
     from s2v_senses import S2vSenses
+    from s2v_key_case_and_sense_variations import S2vKeyCaseAndSenseVariations
+    from s2v_key_commonizer import S2vKeyCommonizer
     s2v_util = S2vUtil(s2v_mock)
     s2v_senses = S2vSenses(s2v_util)
-    the_service = S2vSimilarity(s2v_util, s2v_senses)
+    s2v_key_variations = S2vKeyCaseAndSenseVariations(s2v_util, s2v_senses)
+    s2v_key_commonizer = S2vKeyCommonizer()
+    the_service = S2vSimilarity(s2v_util, s2v_key_variations, s2v_key_commonizer)
 
     return the_service
 
@@ -30,8 +34,8 @@ def test_similarity_combinations_includes_phrase_joined(similarity_service, s2v_
     k1 = ["New_York|LOC"]
     k2 = ["big|ADJ", "apple|NOUN"]
     similarity_service.req_args = { 'attempt-phrase-join-for-compound-phrases': 1 }
-    k1_common_input = similarity_service.s2v_similarity_key_norm(k1)
-    k2_common_input = similarity_service.s2v_similarity_key_norm(k2)
+    k1_common_input = similarity_service.s2v_key_commonizer.call(k1)
+    k2_common_input = similarity_service.s2v_key_commonizer.call(k2)
     expected = [
       [
         [{'required': True, 'wordsense': 'New_York|GPE'}], 
@@ -58,8 +62,22 @@ def test_similarity_combinations_includes_phrase_joined(similarity_service, s2v_
         [{'required': True, 'wordsense': 'big_apple|NOUN'}],
       ],
     ]
-    result = similarity_service.collect_similarity_combinations(k1_common_input, k2_common_input)
+    result = similarity_service.collect_key_variation_combinations(k1_common_input, k2_common_input)
     assert result == expected
+
+
+def test_similarity_combinations_not_in_s2v(similarity_service, s2v_mock):
+    k1 = ["apple|NOUN"]
+    k2 = ["foo|ADJ", "apple|NOUN"]
+    k1_common_input = similarity_service.s2v_key_commonizer.call(k1)
+    k2_common_input = similarity_service.s2v_key_commonizer.call(k2)
+    expected = ['foo']
+    result = similarity_service.collect_key_variation_combinations(k1_common_input, k2_common_input)
+    assert len(result) == 1
+    assert len(result[0]) == 2
+    assert result[0][0] == [{'required': True, 'wordsense': 'apple|NOUN'}]
+    assert result[0][1][0] in [{'required': False, 'wordsense': 'BIG|ADJ'}, {'required': False, 'wordsense': 'big|ADJ'}]
+    assert result[0][1][1] == {'required': False, 'wordsense': 'apple|NOUN'}
 
 
 def test_ner_location_fallback_when_key_doesnt_exist(similarity_service, s2v_mock):

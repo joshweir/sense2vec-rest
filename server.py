@@ -7,6 +7,8 @@ import datetime
 from sense2vec import Sense2Vec
 from s2v_util import S2vUtil
 from s2v_senses import S2vSenses
+from s2v_key_case_and_sense_variations import S2vKeyCaseAndSenseVariations
+from s2v_key_commonizer import S2vKeyCommonizer
 from s2v_similarity import S2vSimilarity
 from s2v_synonyms import S2vSynonyms
 
@@ -18,8 +20,10 @@ s2v = Sense2Vec().from_disk("/sense2vec-model")
 print("model loaded.")
 s2v_util = S2vUtil(s2v)
 s2v_senses = S2vSenses(s2v_util)
-similarity_service = S2vSimilarity(s2v_util, s2v_senses)
-synonyms_service = S2vSynonyms(s2v_util)
+s2v_key_variations = S2vKeyCaseAndSenseVariations(s2v_util, s2v_senses)
+s2v_key_commonizer = S2vKeyCommonizer()
+similarity_service = S2vSimilarity(s2v_util, s2v_key_variations, s2v_key_commonizer)
+synonyms_service = S2vSynonyms(s2v_util, s2v_key_variations, s2v_key_commonizer)
 
 
 @app.route('/', methods=['POST', 'GET'])

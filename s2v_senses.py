@@ -8,6 +8,7 @@ class S2vSenses:
 
   def build_caseless_dict(self):
     result = {}
+    print('loading caseless s2v dict..')
     for key in self.s2v_util.s2v.keys():
       word, sense = self.s2v_util.s2v.split_key(key)
       word_lower = word.lower().replace('_', ' ')
