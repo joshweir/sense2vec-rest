@@ -32,6 +32,6 @@ ADD . /app
 
 CMD gunicorn --bind 0.0.0.0:80 \
   --worker-tmp-dir /dev/shm \
-  --workers=2 --threads=4 --worker-class=gthread \
+  --workers=1 --threads=4 --worker-class=gthread \
   --log-file=- \
   wsgi:app

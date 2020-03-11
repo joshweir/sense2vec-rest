@@ -37,12 +37,14 @@ class S2vSimilarity:
     k1_variations = self.s2v_key_variations.call(
       k1, 
       attempt_phrase_join_for_compound_phrases,
-      random_sample_matching_sense_unkown_keys = True,
+      random_sample_matching_sense_unknown_keys = True,
+      flag_joined_phrase_variations = True,
     )
     k2_variations = self.s2v_key_variations.call(
       k2, 
       attempt_phrase_join_for_compound_phrases,
-      random_sample_matching_sense_unkown_keys = True,
+      random_sample_matching_sense_unknown_keys = True,
+      flag_joined_phrase_variations = True,
     )
     for k1_variation in k1_variations:
       for k2_variation in k2_variations:

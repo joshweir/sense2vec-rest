@@ -2,6 +2,8 @@ import re
 import os
 from functools import cmp_to_key
 
+MAX_CACHED_KEYS=15
+
 class S2vSynonyms:
 
   # allow_non_cached_keys when set to True will pass the list of keys in the call through to s2v.most_similar 
@@ -26,54 +28,83 @@ class S2vSynonyms:
 
 
   def call(self, d, req_args={}):
-    d_list = [d] if isinstance(d, str) else d
+    return self.most_similar_wrapper(
+      self.commonize_input(d), 
+      req_args,
+    )
+
+
+  def commonize_input(self, d):
+    d_list = None
+    if isinstance(d, str):
+      d_list = [d]
+    elif isinstance(d, list):
+      d_list = d
+    elif isinstance(d, dict):
+      d_list = [d['phrase']] if isinstance(d['phrase'], str) else d['phrase']
+    else:
+      raise ValueError("dont recognize type of input: {0} {1}".format(type(d), d))
     d_common_input = self.s2v_key_commonizer.call(d_list)
-    return self.most_similar_wrapper(d_common_input, req_args)
+    is_proper = d['is_proper'] if 'is_proper' in d else self.s2v_util.phrase_is_proper(list(map(lambda x: self.s2v_util.s2v.split_key(x['wordsense'])[0], d_common_input)))
+    return { 'phrase': d_common_input, 'is_proper': is_proper }
 
 
   def most_similar_wrapper(self, d, req_args):
-    k_len = len(d)
-    d_keys = list(map(lambda x: x['wordsense'], d))
+    result = []
+    k_len = len(d['phrase'])
+    d_keys = list(map(lambda x: x['wordsense'], d['phrase']))
     n_results = req_args.get('n') and int(req_args.get('n')) or 10
     attempt_phrase_join_for_compound_phrases = req_args.get('attempt-phrase-join-for-compound-phrases')
     d_variations = self.s2v_key_variations.call(
-      d, 
+      d['phrase'], 
       attempt_phrase_join_for_compound_phrases,
       flag_joined_phrase_variations = True,
+      phrase_is_proper = d['is_proper'],
     )
-    # collect most similar for each variation
-    # if phrase joined synonyms pass through reduction then they are prioritized
-    # collect up to N using phrase joined first sorted by score
-    results_phrase_joined = []
-    results_not_phrase_joined = []
+
+    current_priority = 1
+    current_priority_group = []
     for d_variation in d_variations:
-      is_phrase_joined = d_variation[0]['is_joined']
-      d_variation_keys = list(map(lambda x: x['wordsense'], d_variation))
+      priority = d_variation['priority']
+      if priority != current_priority:
+        result, reached_limit = self.merge_current_priority_group_with_result(
+          current_priority_group,
+          result,
+          n_results,
+          req_args,
+          d_keys,
+        )
+        current_priority_group = []
+        if reached_limit:
+          break
+        current_priority = priority
+
+      is_phrase_joined = d_variation['key'][0]['is_joined']
+      d_variation_keys = list(map(lambda x: x['wordsense'], d_variation['key']))
+      d_variation_keys_words = self.s2v_util.words_only(d_variation['key'])
+
       if os.getenv('S2V_VERBOSE'):
         print()
         print('k', d_variation_keys, ':')
         print()
       if len(d_variation_keys) <= 1 or self.allow_non_cached_keys:
-        for r in self.s2v_util.s2v.most_similar(d_variation_keys, n=max([n_results * 2, 10])):
+        for r in self.s2v_util.s2v.most_similar(d_variation_keys, n=min([MAX_CACHED_KEYS, max([n_results * 2, 10])])):
           value, score = r
           if os.getenv('S2V_VERBOSE'):
             print(value, score)
           word, sense = self.s2v_util.s2v.split_key(value)
-          if is_phrase_joined:
-            results_phrase_joined = self.merge_synonym_result_with_list(results_phrase_joined, word, sense, score)
-          else:
-            results_not_phrase_joined = self.merge_synonym_result_with_list(results_not_phrase_joined, word, sense, score)
+          if self.matches_required_properness(word, d['is_proper']):
+            current_priority_group = self.merge_synonym_result_with_list(current_priority_group, word, sense, score)
 
-    results_phrase_joined.sort(key=cmp_to_key(self.sort_by_score))
-    results_not_phrase_joined.sort(key=cmp_to_key(self.sort_by_score))
-    results_phrase_joined = self.reduce_results_based_on_req_args(results_phrase_joined, d_keys, req_args)
-    results_not_phrase_joined = self.reduce_results_based_on_req_args(results_not_phrase_joined, d_keys, req_args)
-    result = results_phrase_joined[:n_results]
-    result_len = len(result)
-    count_remaining = n_results - result_len
-    if count_remaining > 0:
-      result += results_not_phrase_joined[:count_remaining]
+    result, reached_limit = self.merge_current_priority_group_with_result(
+      current_priority_group,
+      result,
+      n_results,
+      req_args,
+      d_keys,
+    )  
     return result
+
 
   def merge_synonym_result_with_list(self, result, word, sense, score):
     new_result = []
@@ -99,6 +130,24 @@ class S2vSynonyms:
         'score': score,
       })
     return new_result
+
+
+  def merge_current_priority_group_with_result(
+    self,
+    current_priority_group,
+    result,
+    n_results,
+    req_args,
+    d_keys,
+  ):
+    current_priority_group = self.reduce_results_based_on_req_args(current_priority_group, d_keys, req_args)
+    current_priority_group.sort(key=cmp_to_key(self.sort_by_score))
+    result_len = len(result)
+    count_remaining = n_results - result_len
+    if count_remaining > 0:
+      result += current_priority_group[:count_remaining]
+    reached_limit = True if count_remaining <= 0 or len(current_priority_group) >= count_remaining else False
+    return (result, reached_limit)
 
 
   def sort_by_score(self, a, b):
@@ -213,6 +262,12 @@ class S2vSynonyms:
     return d.get('sense')
 
 
+  def matches_required_properness(self, phrase, is_proper):
+    if is_proper is None:
+      return True
+    phrase_properness = self.s2v_util.phrase_is_proper([phrase])
+    return phrase_properness == is_proper
+
   # def filter_reduce_multi_wordform(self, data, d):
   #   seen, result = set(), []
   #   input_list = list(
@@ -238,8 +293,8 @@ if __name__ == '__main__':
   from s2v_senses import S2vSenses
   from s2v_key_case_and_sense_variations import S2vKeyCaseAndSenseVariations
   from s2v_key_commonizer import S2vKeyCommonizer
-  print("loading model from disk..", os.getenv('S2V_MODEL_PATH'))
-  s2v = Sense2Vec().from_disk(os.getenv('S2V_MODEL_PATH'))
+  print("loading model from disk..", os.getenv('S2V_MODEL_PATH_DEV'))
+  s2v = Sense2Vec().from_disk(os.getenv('S2V_MODEL_PATH_DEV'))
   print("model loaded.")
   s2v_util = S2vUtil(s2v)
   s2v_senses = S2vSenses(s2v_util)
@@ -255,11 +310,16 @@ if __name__ == '__main__':
     'reduce-compound-nouns': 1,
     'min-word-len': 2,
   }
-  k = ["New_York|LOC"]
+  k = ["black|NOUN"]
+  result = syn_service.call(k, req_args)
+  print(result)
+  print()
+  k = { 'phrase': ["New_York|LOC"], 'is_proper': True }
   result = syn_service.call(k, req_args)
   print(result)
   print()
   k = ["big|ADJ", "apple|NOUN"]
   result = syn_service.call(k, req_args)
+  print('should return no results because input phrase is not proper')
   print(result)
   print() 
