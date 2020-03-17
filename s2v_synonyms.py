@@ -192,8 +192,8 @@ class S2vSynonyms:
     for item in data:
       value_word = item.get('word')
       value_sense = item.get('sense')
-      compound_prefix_pattern = r"._" + re.escape(input_value) + r"$"
-      compound_suffix_pattern = r"^" + re.escape(input_value) + r"_."
+      compound_prefix_pattern = r".\s" + re.escape(input_value) + r"$"
+      compound_suffix_pattern = r"^" + re.escape(input_value) + r"\s."
       if not re.search(
         compound_prefix_pattern,
         value_word,
@@ -209,7 +209,8 @@ class S2vSynonyms:
 
   def filter_reduce_multicase(self, data, d):
     seen, result = set(), []
-    input_lower = [d.lower()] if isinstance(d, str) else list(map(lambda x: x.lower(), d))
+    input_list = [d] if isinstance(d, str) else d
+    input_lower = [self.s2v_util.s2v.split_key(d)[0].lower()] if isinstance(d, str) else list(map(lambda x: self.s2v_util.s2v.split_key(x)[0].lower(), d))
     for item in data:
       value_lower = item.get('word').lower()
       if value_lower not in seen and value_lower not in input_lower:
@@ -293,8 +294,8 @@ if __name__ == '__main__':
   from s2v_senses import S2vSenses
   from s2v_key_case_and_sense_variations import S2vKeyCaseAndSenseVariations
   from s2v_key_commonizer import S2vKeyCommonizer
-  print("loading model from disk..", os.getenv('S2V_MODEL_PATH_DEV'))
-  s2v = Sense2Vec().from_disk(os.getenv('S2V_MODEL_PATH_DEV'))
+  print("loading model from disk..", os.getenv('S2V_MODEL_PATH'))
+  s2v = Sense2Vec().from_disk(os.getenv('S2V_MODEL_PATH'))
   print("model loaded.")
   s2v_util = S2vUtil(s2v)
   s2v_senses = S2vSenses(s2v_util)
@@ -306,10 +307,19 @@ if __name__ == '__main__':
     'min-score': 0.5,
     'n': 10,
     'match-input-sense': 1,
-    'reduce-multi-case': 1,
+    'reduce-multicase': 1,
     'reduce-compound-nouns': 1,
     'min-word-len': 2,
   }
+
+  k = { 'phrase': ["war|NOUN"], 'is_proper': None }
+  result = syn_service.call(k, req_args)
+  print(result)
+  print()
+  k = { 'phrase': ["war|NOUN"], 'is_proper': True }
+  result = syn_service.call(k, req_args)
+  print(result)
+  print()
   k = ["black|NOUN"]
   result = syn_service.call(k, req_args)
   print(result)

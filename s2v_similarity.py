@@ -48,7 +48,7 @@ class S2vSimilarity:
     )
     for k1_variation in k1_variations:
       for k2_variation in k2_variations:
-        combinations.append([k1_variation, k2_variation])
+        combinations.append([k1_variation['key'], k2_variation['key']])
     return combinations
 
 

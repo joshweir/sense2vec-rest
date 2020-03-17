@@ -68,37 +68,37 @@ def test_similarity_combinations_includes_phrase_joined(similarity_service, s2v_
     assert result == expected
 
 
-# def test_similarity_combinations_not_in_s2v(similarity_service, s2v_mock):
-#     k1 = ["apple|NOUN"]
-#     k2 = ["foo|ADJ", "apple|NOUN"]
-#     k1_common_input = similarity_service.s2v_key_commonizer.call(k1)
-#     k2_common_input = similarity_service.s2v_key_commonizer.call(k2)
-#     expected = ['foo']
-#     result = similarity_service.collect_key_variation_combinations(k1_common_input, k2_common_input)
-#     assert len(result) == 1
-#     assert len(result[0]) == 2
-#     assert result[0][0] == [{'required': True, 'wordsense': 'apple|NOUN', 'is_joined': False}]
-#     assert result[0][1][0] in [{'required': False, 'wordsense': 'BIG|ADJ', 'is_joined': False}, {'required': False, 'wordsense': 'big|ADJ', 'is_joined': False}]
-#     assert result[0][1][1] == {'required': False, 'wordsense': 'apple|NOUN', 'is_joined': False}
+def test_similarity_combinations_not_in_s2v(similarity_service, s2v_mock):
+    k1 = ["apple|NOUN"]
+    k2 = ["foo|ADJ", "apple|NOUN"]
+    k1_common_input = similarity_service.s2v_key_commonizer.call(k1)
+    k2_common_input = similarity_service.s2v_key_commonizer.call(k2)
+    expected = ['foo']
+    result = similarity_service.collect_key_variation_combinations(k1_common_input, k2_common_input)
+    assert len(result) == 1
+    assert len(result[0]) == 2
+    assert result[0][0] == [{'required': True, 'wordsense': 'apple|NOUN', 'is_joined': False}]
+    assert result[0][1][0] in [{'required': False, 'wordsense': 'BIG|ADJ', 'is_joined': False}, {'required': False, 'wordsense': 'big|ADJ', 'is_joined': False}]
+    assert result[0][1][1] == {'required': False, 'wordsense': 'apple|NOUN', 'is_joined': False}
 
 
-# def test_ner_location_fallback_when_key_doesnt_exist(similarity_service, s2v_mock):
-#     k1 = ["New_York|LOC"]
-#     k2 = ["big|ADJ", "apple|NOUN"]
-#     expected = round(float(s2v_mock.similarity(["New_York|GPE"], k2)), 3)
-#     result = similarity_service.call(k1, k2)
-#     assert result == expected
+def test_ner_location_fallback_when_key_doesnt_exist(similarity_service, s2v_mock):
+    k1 = ["New_York|LOC"]
+    k2 = ["big|ADJ", "apple|NOUN"]
+    expected = round(float(s2v_mock.similarity(["New_York|GPE"], k2)), 3)
+    result = similarity_service.call(k1, k2)
+    assert result == expected
 
 
-# def test_param_attempt_phrase_join_for_compound_phrase(similarity_service, s2v_mock):
-#     k1 = ["New_York|LOC"]
-#     k2 = ["big|ADJ", "apple|NOUN"]
-#     k3 = ["big_apple|NOUN"]
-#     expected = round(float(s2v_mock.similarity(["New_York|GPE"], k3)), 3)
-#     result = similarity_service.call(k1, k2, { 'attempt-phrase-join-for-compound-phrases': 1 })
-#     expected_without_compound_phrase_join = round(float(s2v_mock.similarity(["New_York|GPE"], k2)), 3)
-#     result_without_compound_phrase_join = similarity_service.call(k1, k2)
-#     assert result == expected
-#     assert result_without_compound_phrase_join != expected
-#     assert result_without_compound_phrase_join == expected_without_compound_phrase_join
+def test_param_attempt_phrase_join_for_compound_phrase(similarity_service, s2v_mock):
+    k1 = ["New_York|LOC"]
+    k2 = ["big|ADJ", "apple|NOUN"]
+    k3 = ["big_apple|NOUN"]
+    expected = round(float(s2v_mock.similarity(["New_York|GPE"], k3)), 3)
+    result = similarity_service.call(k1, k2, { 'attempt-phrase-join-for-compound-phrases': 1 })
+    expected_without_compound_phrase_join = round(float(s2v_mock.similarity(["New_York|GPE"], k2)), 3)
+    result_without_compound_phrase_join = similarity_service.call(k1, k2)
+    assert result == expected
+    assert result_without_compound_phrase_join != expected
+    assert result_without_compound_phrase_join == expected_without_compound_phrase_join
     

@@ -197,7 +197,7 @@ class S2vKeyCaseAndSenseVariations:
             current_score += 1
           elif not phrase_is_proper and len(last_combination['key']) == len(c) == 1:
             current_sense = self.s2v_util.s2v.split_key(c[0]['wordsense'])[1]
-            prev_sense = self.s2v_util.s2v.split_key(last_combination[0]['wordsense'])[1]
+            prev_sense = self.s2v_util.s2v.split_key(last_combination['key'][0]['wordsense'])[1]
             if (current_sense == 'NOUN' and prev_sense != 'NOUN') or (current_sense != 'NOUN' and prev_sense == 'NOUN'):
               current_score += 1
 
