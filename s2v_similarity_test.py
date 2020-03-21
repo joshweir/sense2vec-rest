@@ -34,33 +34,17 @@ def test_similarity_combinations_includes_phrase_joined(similarity_service, s2v_
     k1 = ["New_York|LOC"]
     k2 = ["big|ADJ", "apple|NOUN"]
     similarity_service.req_args = { 'attempt-phrase-join-for-compound-phrases': 1 }
-    k1_common_input = similarity_service.s2v_key_commonizer.call(k1)
-    k2_common_input = similarity_service.s2v_key_commonizer.call(k2)
+    k1_common_input = similarity_service.commonize_input(k1)
+    k2_common_input = similarity_service.commonize_input(k2)
     expected = [
       [
         [{'wordsense': 'New_York|GPE', 'required': True, 'is_joined': False}], 
         [{'wordsense': 'big_apple|NOUN', 'required': True, 'is_joined': True}],
-      ], 
-      [
-        [{'wordsense': 'New_York|GPE', 'required': True, 'is_joined': False}], 
-        [{'wordsense': 'big|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'apple|NOUN', 'required': False, 'is_joined': False}],
-      ], 
-      [
-        [{'wordsense': 'New_York|GPE', 'required': True, 'is_joined': False}], 
-        [{'wordsense': 'BIG|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'apple|NOUN', 'required': False, 'is_joined': False}],
-      ], 
+      ],
       [
         [{'wordsense': 'New_York|NOUN', 'required': True, 'is_joined': False}], 
         [{'wordsense': 'big_apple|NOUN', 'required': True, 'is_joined': True}],
       ], 
-      [
-        [{'wordsense': 'New_York|NOUN', 'required': True, 'is_joined': False}], 
-        [{'wordsense': 'big|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'apple|NOUN', 'required': False, 'is_joined': False}],
-      ], 
-      [
-        [{'wordsense': 'New_York|NOUN', 'required': True, 'is_joined': False}], 
-        [{'wordsense': 'BIG|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'apple|NOUN', 'required': False, 'is_joined': False}],
-      ],
     ]
     result = similarity_service.collect_key_variation_combinations(k1_common_input, k2_common_input)
     print('result!!')
@@ -71,8 +55,8 @@ def test_similarity_combinations_includes_phrase_joined(similarity_service, s2v_
 def test_similarity_combinations_not_in_s2v(similarity_service, s2v_mock):
     k1 = ["apple|NOUN"]
     k2 = ["foo|ADJ", "apple|NOUN"]
-    k1_common_input = similarity_service.s2v_key_commonizer.call(k1)
-    k2_common_input = similarity_service.s2v_key_commonizer.call(k2)
+    k1_common_input = similarity_service.commonize_input(k1)
+    k2_common_input = similarity_service.commonize_input(k2)
     expected = ['foo']
     result = similarity_service.collect_key_variation_combinations(k1_common_input, k2_common_input)
     assert len(result) == 1

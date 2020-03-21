@@ -193,3 +193,27 @@ def test_ranks_joined_keys_higher_than_non_joined_then_ranks_better_case_matches
       {'key': [{'is_joined': False, 'required': False, 'wordsense': 'big|ADJ'}, {'is_joined': False, 'required': False, 'wordsense': 'apple|NOUN'}], 'priority': 8},
     ]
     assert result == expected
+
+def test_joins_the_last_two_words_of_a_phrase_if_they_exist_as_a_compound(the_service, s2v_mock):
+    k = [
+      { 'wordsense': 'black|ADJ', 'required': False },
+      { 'wordsense': 'big|ADJ', 'required': False },
+      { 'wordsense': 'apple|NOUN', 'required': False },
+    ]
+    result = the_service.call(
+      k, 
+      attempt_phrase_join_for_compound_phrases = True,
+      flag_joined_phrase_variations = True,
+    )
+    expected = [
+      {'key': [{'wordsense': 'black|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'big_apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 1}, 
+      {'key': [{'wordsense': 'black|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'Big_apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 2}, 
+      {'key': [{'wordsense': 'black|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'Big_Apple|LOC', 'required': True, 'is_joined': True}], 'priority': 3}, 
+      {'key': [{'wordsense': 'black|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'Big_Apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 3}, 
+      {'key': [{'wordsense': 'black|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'BIG_apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 4}, 
+      {'key': [{'wordsense': 'black|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'BIG_Apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 5}, 
+      {'key': [{'wordsense': 'black|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'BIG_APPLE|NOUN', 'required': True, 'is_joined': True}], 'priority': 6}, 
+      {'key': [{'wordsense': 'black|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'big|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'apple|NOUN', 'required': False, 'is_joined': False}], 'priority': 7}, 
+      {'key': [{'wordsense': 'black|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'BIG|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'apple|NOUN', 'required': False, 'is_joined': False}], 'priority': 8}
+    ]
+    assert result == expected

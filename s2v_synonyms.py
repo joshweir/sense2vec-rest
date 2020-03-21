@@ -79,7 +79,6 @@ class S2vSynonyms:
           break
         current_priority = priority
 
-      is_phrase_joined = d_variation['key'][0]['is_joined']
       d_variation_keys = list(map(lambda x: x['wordsense'], d_variation['key']))
       d_variation_keys_words = self.s2v_util.words_only(d_variation['key'])
 
@@ -294,8 +293,9 @@ if __name__ == '__main__':
   from s2v_senses import S2vSenses
   from s2v_key_case_and_sense_variations import S2vKeyCaseAndSenseVariations
   from s2v_key_commonizer import S2vKeyCommonizer
-  print("loading model from disk..", os.getenv('S2V_MODEL_PATH'))
-  s2v = Sense2Vec().from_disk(os.getenv('S2V_MODEL_PATH'))
+  S2V_MODAL_PATH = os.getenv('S2V_MODEL_PATH')
+  print("loading model from disk..", S2V_MODAL_PATH)
+  s2v = Sense2Vec().from_disk(S2V_MODAL_PATH)
   print("model loaded.")
   s2v_util = S2vUtil(s2v)
   s2v_senses = S2vSenses(s2v_util)

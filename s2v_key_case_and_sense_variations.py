@@ -8,7 +8,7 @@ class S2vKeyCaseAndSenseVariations:
     self.s2v_util = s2v_util
     self.s2v_senses = s2v_senses
 
-  def call(self, k, attempt_phrase_join_for_compound_phrases=None, flag_joined_phrase_variations=False, random_sample_matching_sense_unknown_keys=False, phrase_is_proper=None):
+  def call(self, k, attempt_phrase_join_for_compound_phrases=None, flag_joined_phrase_variations=False, random_sample_matching_sense_unknown_keys=False, phrase_is_proper=None, return_only_top_priority=False):
     self.flag_joined_phrase_variations = flag_joined_phrase_variations
     if phrase_is_proper is None:
       phrase_is_proper = self.s2v_util.phrase_is_proper(list(map(lambda x: self.s2v_util.s2v.split_key(x['wordsense'])[0], k)))
@@ -16,6 +16,8 @@ class S2vKeyCaseAndSenseVariations:
     k_len = len(k)
     if k_len >= 2 and attempt_phrase_join_for_compound_phrases:
       combinations += self.collect_compound_phrase_joined_combinations(k)
+    if k_len > 2  and attempt_phrase_join_for_compound_phrases:
+      combinations += self.collect_last_compound_joined_combinations(k)  
     combinations += self.collect_combinations_based_on_each_keys_combinations(k)
     if random_sample_matching_sense_unknown_keys and len(combinations) <= 0:
       combinations = self.collect_combinations_based_on_each_keys_combinations(
@@ -25,11 +27,23 @@ class S2vKeyCaseAndSenseVariations:
     # print('check for key!', k)
     # print('combinations', combinations)
     combinations.sort(key=cmp_to_key(self.sort_by_joined_then_case_match_to_key(k, phrase_is_proper)))
-    combinations = self.assign_priority_scores(combinations, phrase_is_proper)
+    combinations = self.assign_priority_scores(combinations, phrase_is_proper, return_only_top_priority)
     return combinations
 
 
   def collect_combinations_based_on_each_keys_combinations(self, k, random_sample_matching_sense_unknown_keys=False):
+    return self.collect_key_sense_combinations(k, random_sample_matching_sense_unknown_keys)
+
+
+  def collect_last_compound_joined_combinations(self, k):
+    last_compound_pair_joined_key = ' '.join(map(lambda x: self.s2v_util.s2v.split_key(x['wordsense'])[0], k[-2:]))
+    if len(self.s2v_senses.get_noun_based_senses(last_compound_pair_joined_key)) <= 0:
+      return []
+    new_k = k[:-2] + [{ 'wordsense': self.s2v_util.s2v.make_key(last_compound_pair_joined_key, 'NOUN'), 'required': True, 'is_joined': True }]
+    return self.collect_key_sense_combinations(new_k)
+
+
+  def collect_key_sense_combinations(self, k, random_sample_matching_sense_unknown_keys=False):
     result = []
     inner_result = []
     len_k = len(k)
@@ -43,12 +57,12 @@ class S2vKeyCaseAndSenseVariations:
         if len_k > 1:
           v = { 'wordsense': s, 'required': sub_k['required'] }
           if self.flag_joined_phrase_variations:
-            v['is_joined'] = False
+            v['is_joined'] = sub_k['is_joined'] if 'is_joined' in sub_k else False
           sub_k_result.append(v)
         else:
           v = { 'wordsense': s, 'required': sub_k['required'] }
           if self.flag_joined_phrase_variations:
-            v['is_joined'] = False
+            v['is_joined'] = sub_k['is_joined'] if 'is_joined' in sub_k else False
           result.append([v])
       if len_k > 1:
         inner_result.append(sub_k_result)
@@ -97,10 +111,17 @@ class S2vKeyCaseAndSenseVariations:
       elif a_len > 0 and not b_len > 0:
         return -1
 
-      if 'is_joined' in b[0]:
-        if b[0]['is_joined'] and not a[0]['is_joined']:
+
+      if b_len == 1 and b[0]['is_joined'] and not a[0]['is_joined']:
+        return 1
+      elif a_len == 1 and a[0]['is_joined'] and not b[0]['is_joined']:
+        return -1
+      else:
+        a_is_joined_len = len(list(filter(lambda x: 'is_joined' in x and x['is_joined'], a)))
+        b_is_joined_len = len(list(filter(lambda x: 'is_joined' in x and x['is_joined'], b)))
+        if b_is_joined_len > 0 and b_is_joined_len > a_is_joined_len:
           return 1
-        elif a[0]['is_joined'] and not b[0]['is_joined']:
+        elif a_is_joined_len > 0 and a_is_joined_len > b_is_joined_len:
           return -1
 
       a_words = self.s2v_util.words_only(a)
@@ -180,26 +201,35 @@ class S2vKeyCaseAndSenseVariations:
     return the_actual_sort
 
 
-  def assign_priority_scores(self, combinations, phrase_is_proper):
-    current_score = 1
+  def assign_priority_scores(self, combinations, phrase_is_proper, return_only_top_priority):
+    initial_score = 1
+    current_score = initial_score
     new_combinations = []
     last_combination = None
     for i, c in enumerate(combinations):
       if i > 0:
-        if 'is_joined' in last_combination['key'][0] and \
+        if len(last_combination['key']) == 1 and 'is_joined' in last_combination['key'][0] and \
             last_combination['key'][0]['is_joined'] and \
-            ('is_joined' not in c[0] or c[0]['is_joined'] != last_combination['key'][0]['is_joined']):
+            (len(last_combination['key']) > 1 or 'is_joined' not in c[0] or c[0]['is_joined'] != last_combination['key'][0]['is_joined']):
           current_score += 1
         else:
-          words = self.s2v_util.words_only(c)
-          prev_words = self.s2v_util.words_only(last_combination['key'])
-          if words != prev_words:
+          c_is_joined_len = len(list(filter(lambda x: 'is_joined' in x and x['is_joined'], c)))
+          prev_is_joined_len = len(list(filter(lambda x: 'is_joined' in x and x['is_joined'], last_combination['key'])))
+          if c_is_joined_len != prev_is_joined_len:
             current_score += 1
-          elif not phrase_is_proper and len(last_combination['key']) == len(c) == 1:
-            current_sense = self.s2v_util.s2v.split_key(c[0]['wordsense'])[1]
-            prev_sense = self.s2v_util.s2v.split_key(last_combination['key'][0]['wordsense'])[1]
-            if (current_sense == 'NOUN' and prev_sense != 'NOUN') or (current_sense != 'NOUN' and prev_sense == 'NOUN'):
+          else:
+            words = self.s2v_util.words_only(c)
+            prev_words = self.s2v_util.words_only(last_combination['key'])
+            if words != prev_words:
               current_score += 1
+            elif not phrase_is_proper and len(last_combination['key']) == len(c) == 1:
+              current_sense = self.s2v_util.s2v.split_key(c[0]['wordsense'])[1]
+              prev_sense = self.s2v_util.s2v.split_key(last_combination['key'][0]['wordsense'])[1]
+              if (current_sense == 'NOUN' and prev_sense != 'NOUN') or (current_sense != 'NOUN' and prev_sense == 'NOUN'):
+                current_score += 1
+      
+      if return_only_top_priority and current_score > initial_score:
+        break
 
       new_combination = { 'key': c, 'priority': current_score }
       new_combinations.append(new_combination)
