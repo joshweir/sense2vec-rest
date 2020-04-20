@@ -56,6 +56,7 @@ class S2vSimilarity:
       flag_joined_phrase_variations = True,
       return_only_top_priority = True,
       phrase_is_proper = k1['is_proper'],
+      limit = 25,
     )
     k2_variations = self.s2v_key_variations.call(
       k2['phrase'], 
@@ -64,6 +65,7 @@ class S2vSimilarity:
       flag_joined_phrase_variations = True,
       return_only_top_priority = True,
       phrase_is_proper = k2['is_proper'],
+      limit = 25,
     )
     for k1_variation in k1_variations:
       for k2_variation in k2_variations:

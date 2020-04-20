@@ -8,17 +8,21 @@ class S2vKeyCaseAndSenseVariations:
     self.s2v_util = s2v_util
     self.s2v_senses = s2v_senses
 
-  def call(self, k, attempt_phrase_join_for_compound_phrases=None, flag_joined_phrase_variations=False, random_sample_matching_sense_unknown_keys=False, phrase_is_proper=None, return_only_top_priority=False):
+  def call(self, k, attempt_phrase_join_for_compound_phrases=None, flag_joined_phrase_variations=False, random_sample_matching_sense_unknown_keys=False, phrase_is_proper=None, return_only_top_priority=False, must_only_phrase_join_for_compound_phrases=None, limit=None):
     self.flag_joined_phrase_variations = flag_joined_phrase_variations
+    self.must_only_phrase_join_for_compound_phrases = must_only_phrase_join_for_compound_phrases
+    self.limit = limit
     if phrase_is_proper is None:
       phrase_is_proper = self.s2v_util.phrase_is_proper(list(map(lambda x: self.s2v_util.s2v.split_key(x['wordsense'])[0], k)))
     combinations = []
     k_len = len(k)
-    if k_len >= 2 and attempt_phrase_join_for_compound_phrases:
+    if k_len >= 2 and attempt_phrase_join_for_compound_phrases or self.must_only_phrase_join_for_compound_phrases:
       combinations += self.collect_compound_phrase_joined_combinations(k)
-    if k_len > 2  and attempt_phrase_join_for_compound_phrases:
-      combinations += self.collect_last_compound_joined_combinations(k)  
-    combinations += self.collect_combinations_based_on_each_keys_combinations(k)
+    if k_len > 2  and attempt_phrase_join_for_compound_phrases and not self.must_only_phrase_join_for_compound_phrases:
+      combinations += self.collect_last_compound_joined_combinations(k)
+    remaining_limit = None if self.limit is None else (self.limit-len(combinations))
+    if (remaining_limit is None or remaining_limit > 0) and not self.must_only_phrase_join_for_compound_phrases or k_len < 2:
+      combinations += self.collect_combinations_based_on_each_keys_combinations(k, limit=remaining_limit)
     if random_sample_matching_sense_unknown_keys and len(combinations) <= 0:
       combinations = self.collect_combinations_based_on_each_keys_combinations(
         k,
@@ -28,11 +32,11 @@ class S2vKeyCaseAndSenseVariations:
     # print('combinations', combinations)
     combinations.sort(key=cmp_to_key(self.sort_by_joined_then_case_match_to_key(k, phrase_is_proper)))
     combinations = self.assign_priority_scores(combinations, phrase_is_proper, return_only_top_priority)
-    return combinations
+    return combinations[:self.limit]
 
 
-  def collect_combinations_based_on_each_keys_combinations(self, k, random_sample_matching_sense_unknown_keys=False):
-    return self.collect_key_sense_combinations(k, random_sample_matching_sense_unknown_keys)
+  def collect_combinations_based_on_each_keys_combinations(self, k, random_sample_matching_sense_unknown_keys=False, limit=None):
+    return self.collect_key_sense_combinations(k, random_sample_matching_sense_unknown_keys, limit=limit)
 
 
   def collect_last_compound_joined_combinations(self, k):
@@ -43,7 +47,8 @@ class S2vKeyCaseAndSenseVariations:
     return self.collect_key_sense_combinations(new_k)
 
 
-  def collect_key_sense_combinations(self, k, random_sample_matching_sense_unknown_keys=False):
+  def collect_key_sense_combinations(self, k, random_sample_matching_sense_unknown_keys=False, limit=None):
+    remaining = limit
     result = []
     inner_result = []
     len_k = len(k)
@@ -59,11 +64,19 @@ class S2vKeyCaseAndSenseVariations:
           if self.flag_joined_phrase_variations:
             v['is_joined'] = sub_k['is_joined'] if 'is_joined' in sub_k else False
           sub_k_result.append(v)
+          if not remaining is None:
+            remaining -= 1
+            if remaining <= 0:
+              break
         else:
           v = { 'wordsense': s, 'required': sub_k['required'] }
           if self.flag_joined_phrase_variations:
             v['is_joined'] = sub_k['is_joined'] if 'is_joined' in sub_k else False
           result.append([v])
+          if not remaining is None:
+            remaining -= 1
+            if remaining <= 0:
+              break
       if len_k > 1:
         inner_result.append(sub_k_result)
     # combine all inner combinations

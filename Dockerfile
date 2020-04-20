@@ -34,4 +34,5 @@ CMD gunicorn --bind 0.0.0.0:80 \
   --worker-tmp-dir /dev/shm \
   --workers=1 --threads=4 --worker-class=gthread \
   --log-file=- \
+  --timeout=180 \
   wsgi:app

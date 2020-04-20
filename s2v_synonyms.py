@@ -57,9 +57,10 @@ class S2vSynonyms:
     attempt_phrase_join_for_compound_phrases = req_args.get('attempt-phrase-join-for-compound-phrases')
     d_variations = self.s2v_key_variations.call(
       d['phrase'], 
-      attempt_phrase_join_for_compound_phrases,
+      must_only_phrase_join_for_compound_phrases = attempt_phrase_join_for_compound_phrases,
       flag_joined_phrase_variations = True,
       phrase_is_proper = d['is_proper'],
+      limit = 25,
     )
 
     current_priority = 1

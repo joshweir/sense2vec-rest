@@ -5,7 +5,7 @@ from s2v_key_case_and_sense_variations import S2vKeyCaseAndSenseVariations
 def s2v_mock():
     from sense2vec import Sense2Vec
     import numpy as np
-    s2v = Sense2Vec(shape=(14, 4))
+    s2v = Sense2Vec(shape=(16, 4))
     s2v.add('New_York|GPE', np.asarray([1, 1, 1, 1], dtype=np.float32))
     s2v.add('New_York|NOUN', np.asarray([1, 2, 1, 1], dtype=np.float32))
     s2v.add('big|ADJ', np.asarray([2, 5, 4, 2], dtype=np.float32))
@@ -20,6 +20,8 @@ def s2v_mock():
     s2v.add('BIG_APPLE|NOUN', np.asarray([6, 6, 6, 6], dtype=np.float32))
     s2v.add('black|NOUN', np.asarray([6, 6, 6, 6], dtype=np.float32))
     s2v.add('black|ADJ', np.asarray([5, 5, 5, 5], dtype=np.float32))
+    s2v.add('blue|NOUN', np.asarray([6, 6, 6, 6], dtype=np.float32))
+    s2v.add('blue_big_apple|NOUN', np.asarray([6, 6, 6, 6], dtype=np.float32))
     return s2v
 
 
@@ -215,5 +217,89 @@ def test_joins_the_last_two_words_of_a_phrase_if_they_exist_as_a_compound(the_se
       {'key': [{'wordsense': 'black|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'BIG_APPLE|NOUN', 'required': True, 'is_joined': True}], 'priority': 6}, 
       {'key': [{'wordsense': 'black|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'big|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'apple|NOUN', 'required': False, 'is_joined': False}], 'priority': 7}, 
       {'key': [{'wordsense': 'black|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'BIG|ADJ', 'required': False, 'is_joined': False}, {'wordsense': 'apple|NOUN', 'required': False, 'is_joined': False}], 'priority': 8}
+    ]
+    assert result == expected
+
+def test_3_word_all_required_compound(the_service, s2v_mock):
+    k = [
+      { 'wordsense': 'blue|NOUN', 'required': True },
+      { 'wordsense': 'big|ADJ', 'required': True },
+      { 'wordsense': 'apple|NOUN', 'required': True },
+    ]
+    result = the_service.call(
+      k, 
+      attempt_phrase_join_for_compound_phrases = True,
+      flag_joined_phrase_variations = True,
+    )
+    expected = [
+      {'key': [{'wordsense': 'blue_big_apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 1}, 
+      {'key': [{'wordsense': 'blue|NOUN', 'required': True, 'is_joined': False}, {'wordsense': 'big_apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 2}, 
+      {'key': [{'wordsense': 'blue|NOUN', 'required': True, 'is_joined': False}, {'wordsense': 'Big_apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 3}, 
+      {'key': [{'wordsense': 'blue|NOUN', 'required': True, 'is_joined': False}, {'wordsense': 'Big_Apple|LOC', 'required': True, 'is_joined': True}], 'priority': 4}, 
+      {'key': [{'wordsense': 'blue|NOUN', 'required': True, 'is_joined': False}, {'wordsense': 'Big_Apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 4}, 
+      {'key': [{'wordsense': 'blue|NOUN', 'required': True, 'is_joined': False}, {'wordsense': 'BIG_apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 5}, 
+      {'key': [{'wordsense': 'blue|NOUN', 'required': True, 'is_joined': False}, {'wordsense': 'BIG_Apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 6}, 
+      {'key': [{'wordsense': 'blue|NOUN', 'required': True, 'is_joined': False}, {'wordsense': 'BIG_APPLE|NOUN', 'required': True, 'is_joined': True}], 'priority': 7}, 
+      {'key': [{'wordsense': 'blue|NOUN', 'required': True, 'is_joined': False}, {'wordsense': 'big|ADJ', 'required': True, 'is_joined': False}, {'wordsense': 'apple|NOUN', 'required': True, 'is_joined': False}], 'priority': 8}, 
+      {'key': [{'wordsense': 'blue|NOUN', 'required': True, 'is_joined': False}, {'wordsense': 'BIG|ADJ', 'required': True, 'is_joined': False}, {'wordsense': 'apple|NOUN', 'required': True, 'is_joined': False}], 'priority': 9}
+    ]
+    assert result == expected
+
+def test_3_word_all_required_compound_must_only_phrase_join(the_service, s2v_mock):
+    k = [
+      { 'wordsense': 'blue|NOUN', 'required': True },
+      { 'wordsense': 'big|ADJ', 'required': True },
+      { 'wordsense': 'apple|NOUN', 'required': True },
+    ]
+    result = the_service.call(
+      k, 
+      attempt_phrase_join_for_compound_phrases = True,
+      flag_joined_phrase_variations = True,
+      must_only_phrase_join_for_compound_phrases = True,
+    )
+    expected = [
+      {'key': [{'wordsense': 'blue_big_apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 1}, 
+    ]
+    assert result == expected
+
+def test_3_word_all_required_compound_must_only_phrase_join_2(the_service, s2v_mock):
+    k = [
+      { 'wordsense': 'big|ADJ', 'required': False },
+      { 'wordsense': 'apple|NOUN', 'required': True },
+    ]
+    result = the_service.call(
+      k, 
+      attempt_phrase_join_for_compound_phrases = True,
+      flag_joined_phrase_variations = True,
+      must_only_phrase_join_for_compound_phrases = True,
+    )
+    expected = [
+      {'key': [{'wordsense': 'big_apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 1}, 
+      {'key': [{'wordsense': 'Big_apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 2},  
+      {'key': [{'wordsense': 'Big_Apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 3}, 
+      {'key': [{'wordsense': 'BIG_apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 4}, 
+      {'key': [{'wordsense': 'BIG_Apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 5}, 
+      {'key': [{'wordsense': 'BIG_APPLE|NOUN', 'required': True, 'is_joined': True}], 'priority': 6},
+      {'key': [{'wordsense': 'Big_Apple|LOC', 'required': True, 'is_joined': True}], 'priority': 7}
+    ]
+    assert result == expected
+
+def test_limit(the_service, s2v_mock):
+    k = [
+      { 'wordsense': 'blue|NOUN', 'required': True },
+      { 'wordsense': 'big|ADJ', 'required': True },
+      { 'wordsense': 'apple|NOUN', 'required': True },
+    ]
+    result = the_service.call(
+      k, 
+      attempt_phrase_join_for_compound_phrases = True,
+      flag_joined_phrase_variations = True,
+      limit = 4,
+    )
+    expected = [
+      {'key': [{'wordsense': 'blue_big_apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 1}, 
+      {'key': [{'wordsense': 'blue|NOUN', 'required': True, 'is_joined': False}, {'wordsense': 'big_apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 2}, 
+      {'key': [{'wordsense': 'blue|NOUN', 'required': True, 'is_joined': False}, {'wordsense': 'Big_apple|NOUN', 'required': True, 'is_joined': True}], 'priority': 3}, 
+      {'key': [{'wordsense': 'blue|NOUN', 'required': True, 'is_joined': False}, {'wordsense': 'Big_Apple|LOC', 'required': True, 'is_joined': True}], 'priority': 4},
     ]
     assert result == expected
