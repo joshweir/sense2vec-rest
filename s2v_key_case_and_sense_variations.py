@@ -1,4 +1,5 @@
 import random
+import os
 from itertools import product
 from functools import cmp_to_key
 
@@ -52,13 +53,45 @@ class S2vKeyCaseAndSenseVariations:
     result = []
     inner_result = []
     len_k = len(k)
+    if os.getenv('S2V_VERBOSE'):
+      print()
+      print('collecting key sense combos for', k)
+      print()
     for sub_k in k:
       sub_k_result = []
+      if os.getenv('S2V_VERBOSE'):
+        print('getting senses for sub_k', sub_k)
       word, sense = self.s2v_util.s2v.split_key(sub_k['wordsense'])
-      sense_based_senses = self.s2v_senses.get_adjective_based_senses(word) if sense in self.s2v_util.s2v_adj_tags else self.s2v_senses.get_noun_based_senses(word)
-      if random_sample_matching_sense_unknown_keys and len(sense_based_senses) <= 0:
-        sense_based_senses = [self.random_sample_matching_sense(sense)]
+      sense_based_senses = []
+
+      if sense in self.s2v_util.s2v_adj_tags:
+        sense_based_senses = self.s2v_senses.get_adjective_based_senses(word)
+      elif sense in self.s2v_util.s2v_noun_tags:
+        sense_based_senses = self.s2v_senses.get_noun_based_senses(word)
+
+      if len(sense_based_senses) <= 0:
+        if random_sample_matching_sense_unknown_keys:
+          sense_based_senses = []
+          random_sample = self.random_sample_matching_sense(sense)
+          if random_sample:
+            sense_based_senses = [random_sample]
+          if os.getenv('S2V_VERBOSE'):
+            print('no senses got random sample', sense_based_senses)
+        else:
+          print('checking if sense in s2v', sub_k['wordsense'])
+          if sub_k['wordsense'] in self.s2v_util.s2v:
+            sense_based_senses = [sub_k['wordsense']]
+            if os.getenv('S2V_VERBOSE'):
+              print('no senses default to input sense', sense_based_senses)
+          else:
+            if os.getenv('S2V_VERBOSE'):
+              print('no senses')
+            sense_based_senses = []
+      if os.getenv('S2V_VERBOSE'):
+        print('senses for ', sub_k, sense_based_senses)
       for s in sense_based_senses:
+        if os.getenv('S2V_VERBOSE'):
+          print('collecting sense based sense', s, ' for ', sub_k)
         if len_k > 1:
           v = { 'wordsense': s, 'required': sub_k['required'] }
           if self.flag_joined_phrase_variations:
@@ -82,7 +115,6 @@ class S2vKeyCaseAndSenseVariations:
     # combine all inner combinations
     if len_k > 1:
       for to_append in list(product(*inner_result)):
-        # print('check', to_append)
         result.append(list(to_append))
     return result
 
@@ -99,8 +131,14 @@ class S2vKeyCaseAndSenseVariations:
 
 
   def random_sample_matching_sense(self, matching_sense):
+    if matching_sense not in self.s2v_util.s2v_noun_tags and matching_sense not in self.s2v_util.s2v_adj_tags:
+      return None
+
     matching_sample = None
+    attempts_remaining = 10
     while True:
+      if attempts_remaining <= 0:
+        return None
       samples = random.sample(self.s2v_util.s2v_all_keys, min([50, self.s2v_util.s2v_all_keys_len]))
       for sample in samples:
         if sample[-2:] != '|X':
@@ -108,9 +146,10 @@ class S2vKeyCaseAndSenseVariations:
           if sense == matching_sense:
             matching_sample = sample
             break
-
+          
       if matching_sample:
         return matching_sample
+      attempts_remaining -= 1
 
 
   def sort_by_joined_then_case_match_to_key(self, k, phrase_is_proper):
