@@ -1,7 +1,9 @@
-docker build -t joshweir/sense2vec-rest:latest .
+docker build --platform linux/amd64 -t joshweir/sense2vec-rest:latest .
 docker push joshweir/sense2vec-rest:latest
 
-docker build -t joshweir/sense2vec-rest:dev --build-arg CACHEBUST=$(date +%s) -f Dockerfile.dev .
+docker build --platform linux/amd64 -t 767398015747.dkr.ecr.us-east-1.amazonaws.com/s2v:latest .
+
+docker build --platform linux/amd64 -t joshweir/sense2vec-rest:dev --build-arg CACHEBUST=$(date +%s) -f Dockerfile.dev .
 docker push joshweir/sense2vec-rest:dev
 
 # run server: 

@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y \
     # supervisor \
     curl \
     nginx \
-    python-dev \
+    python-dev-is-python3 \
     git &&\
     apt-get -q clean -y && rm -rf /var/lib/apt/lists/* && rm -f /var/cache/apt/*.bin
 
@@ -21,6 +21,9 @@ RUN mkdir /app
 
 # RUN pip install textblob
 # RUN python -m textblob.download_corpora
+
+WORKDIR /
+COPY ./s2v_model_2019 /sense2vec-model
 
 WORKDIR /app
 
