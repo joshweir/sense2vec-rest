@@ -75,5 +75,17 @@ def similarity():
       status=200, response=json.dumps(results), content_type="application/json")
 
 
+@app.route('/healthcheck', methods=['GET'])
+def healthcheck():
+  parsed = json.loads("[[\"plastic|NOUN\"]]")
+
+  results = []
+  for item in parsed:
+    result = synonyms_service.call(item, request.args)
+    results.append(result)
+
+  return Response(
+      status=200, response=json.dumps(results), content_type="application/json")
+
 if __name__ == '__main__':
   app.run(port=port, host="0.0.0.0")

@@ -3,8 +3,13 @@ docker push joshweir/sense2vec-rest:latest
 
 docker build --platform linux/amd64 -t 767398015747.dkr.ecr.us-east-1.amazonaws.com/s2v:latest .
 
+docker push 767398015747.dkr.ecr.us-east-1.amazonaws.com/s2v:latest
+
 docker build --platform linux/amd64 -t joshweir/sense2vec-rest:dev --build-arg CACHEBUST=$(date +%s) -f Dockerfile.dev .
 docker push joshweir/sense2vec-rest:dev
+
+# run server (aws image):
+# docker run -it --rm -p "127.0.0.1:9188:80" 767398015747.dkr.ecr.us-east-1.amazonaws.com/s2v:latest
 
 # run server: 
 # docker run -it --rm -p "127.0.0.1:9188:80" -v $S2V_MODEL_PATH:/sense2vec-model joshweir/sense2vec-rest
